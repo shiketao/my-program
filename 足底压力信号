@@ -1,0 +1,280 @@
+#include <iostream>
+#include <Windows.h>
+#include <string>
+#include <thread>
+#include <iomanip>
+#include <vector>
+#include <fstream>
+#include <sstream>
+#include <time.h>
+#include <stdlib.h>
+#include <math.h>
+
+using namespace std;
+
+HANDLE 初始化串口(char *szStr)
+{
+
+	WCHAR wszClassName[5];
+	memset(wszClassName, 0, sizeof(wszClassName));
+	MultiByteToWideChar(CP_ACP, 0, szStr, strlen(szStr) + 1, wszClassName,
+		sizeof(wszClassName) / sizeof(wszClassName[0]));
+	HANDLE hCom1 = CreateFile(wszClassName,//COM口
+		GENERIC_READ | GENERIC_WRITE,	//允许读和写
+		0, //独占方式
+		NULL,
+		OPEN_EXISTING, //打开而不是创建
+		0, //同步方式
+		NULL);
+
+	if (hCom1 == INVALID_HANDLE_VALUE)
+	{
+		printf("打开COM失败!\n");
+	}
+	else
+	{
+		printf("COM打开成功！\n");
+	}
+
+	SetupComm(hCom1, 16, 16); //输入缓冲区和输出缓冲区的大小都是1024
+	COMMTIMEOUTS TimeOuts;
+
+	//设定读超时
+	TimeOuts.ReadIntervalTimeout = 100;
+	TimeOuts.ReadTotalTimeoutMultiplier = 5000;
+	TimeOuts.ReadTotalTimeoutConstant = 5000;
+	//设定写超时
+	TimeOuts.WriteTotalTimeoutMultiplier = 500;
+	TimeOuts.WriteTotalTimeoutConstant = 2000;
+	SetCommTimeouts(hCom1, &TimeOuts); //设置超时
+	DCB dcb;
+	GetCommState(hCom1, &dcb);
+	dcb.BaudRate = 115200; //波特率为9600
+	dcb.ByteSize = 8; //每个字节有8位
+	dcb.Parity = NOPARITY; //无奇偶校验位
+	dcb.StopBits = ONESTOPBIT; //1个停止位
+	SetCommState(hCom1, &dcb);
+	return hCom1;
+}
+
+int main()
+{
+	HANDLE hCom1 = 初始化串口("COM1");
+	DWORD readsize;
+	int shuju[1] = { 0 };//每次接收一个字节
+	int count = 0;	//数据包字节个数
+	int flag0 = 0;	//接收每个字节的标志位
+	int flag1 = 0;	//0为第一次判断支撑转摆动、1为否
+	int flag2 = 0;	//在第一次判断中，判断是否转为摆动
+	int state = 1;	//支撑相
+	int i = 0;		//计数
+	int j = 0;		//计数
+	int k = 0;		//判断斜率时，数据个数是否满足
+	int z = 0;		//计数
+	int m1 = 0;
+	int m2 = 0;
+	int n = 0;
+	float rec[9] = { 0 };
+	float yali1[10] = { 0 };
+	float yali2[10] = { 0 };
+	float yali3[10] = { 0 };
+	float a[10] = { 0 };
+	float b[10][3] = { 0 };	//储存判断第一次支撑转摆动时之前的10组数据
+	float c[10][3] = { 0 };	//计算基准值的点
+	float d[4][3] = { 0 };	//计算4个点均值的数组
+	float A1 = 0;			//三个基准值
+	float A2 = 0;
+	float A3 = 0;
+	float A11 = 0;			//三个基准值
+	float A21 = 0;
+	float A31 = 0;
+	float A12 = 0;			//三个基准值
+	float A22 = 0;
+	float A32 = 0;
+
+	while (1)
+	{
+		ReadFile(hCom1,	//读入shuju的文件指针,这个指针指向的文件必须是GENERIC_READ 访问属性的文件
+			shuju,		//接收shuju的缓冲区
+			1,			//指定要读取的字节数
+			&readsize,	//指向一个DWORD类型变量的指针，用来接收读取的字节数
+			NULL);
+
+		if (readsize > 0)
+		{
+			if (flag0 == 0 && shuju[0] == 0xAA)
+			{
+				flag0 = 1;
+			}
+
+			else if (flag0 == 1 && shuju[0] == 0x55)
+			{
+				flag0 = 2;
+			}
+
+			else if (flag0 == 2)
+			{
+				rec[count] = shuju[0];
+				count++;
+
+				if (count == 9)
+				{
+					yali1[9] = ((long)(rec[8] + rec[7] * 256 + rec[6] * 256 * 256))*(1.7881E-07);//右足中
+					yali2[9] = ((long)(rec[5] + rec[4] * 256 + rec[3] * 256 * 256))*(1.7881E-07);//右足前
+					yali3[9] = ((long)(rec[2] + rec[1] * 256 + rec[0] * 256 * 256))*(1.7881E-07);//右足后
+					count = 0;
+					flag0 = 0;
+
+					if (flag1 == 0 && state == 1)
+					{
+						d[3][0] = yali1[9];
+						d[3][1] = yali2[9];
+						d[3][2] = yali3[9];
+
+						if (n >= 4)
+						{
+							b[9][0] = (d[3][0] + d[2][0] + d[1][0] + d[0][0]) / 4;
+							b[9][1] = (d[3][1] + d[2][1] + d[1][1] + d[0][1]) / 4;
+							b[9][2] = (d[3][2] + d[2][2] + d[1][2] + d[0][2]) / 4;
+						}
+
+						else 
+						{
+							n++;
+						}
+
+						for (i = 0; i < 4; i++)
+						{
+							d[0][i] = d[0][i + 1];
+							d[1][i] = d[1][i + 1];
+							d[2][i] = d[2][i + 1];
+						}
+
+						if (k >= 11)	//只有3处压力减小，才转为摆动
+						{
+							if (flag2 == 0)
+							{
+								if (((b[9][0] - b[0][0]) < -0.02) && ((b[9][1] - b[0][1]) < -0.03) && ((b[9][2] - b[0][2]) < -0.03))
+								{
+									flag2 = 1;
+								}
+							}
+
+							if (flag2 == 1)
+							{
+								if (((b[9][0] - b[6][0]) < -0.02) && ((b[9][1] - b[6][1]) < -0.03) && ((b[9][2] - b[6][2]) < -0.03))
+								{
+									state = 0;//进入摆动项
+									flag1 = 1;
+								}
+
+								else
+								{
+									flag2 = 0;
+								}
+							}
+						}
+
+						else
+						{
+							k++;
+						}
+
+						for (j = 0; j < 9; j++)
+						{
+							b[j][0] = b[j + 1][0];
+							b[j][1] = b[j + 1][1];
+							b[j][2] = b[j + 1][2];
+						}
+					}
+
+					if (flag1 == 1)//已经有基准值
+					{
+						if (state == 0)//此时为摆动相
+						{
+							c[z][0] = yali1[9];
+							c[z][1] = yali2[9];
+							c[z][2] = yali3[9];
+
+							if (z == 10)
+							{
+								A1 = (c[z][0] + c[z - 1][0] + c[z - 2][0]) / 3;//足中基准值
+								A2 = (c[z][1] + c[z - 1][1] + c[z - 2][1]) / 3;//足前基准值
+								A3 = (c[z][2] + c[z - 1][2] + c[z - 2][2]) / 3;//足后基准值
+								A11 = (c[z][0] + c[z - 1][0] + c[z - 2][0] + c[z - 3][0] + c[z - 4][0] + c[z - 5][0] + c[z - 6][0] + c[z - 7][0] + c[z - 8][0]) / 9;//足中基准值
+								A21 = (c[z][1] + c[z - 1][1] + c[z - 2][1] + c[z - 3][1] + c[z - 4][1] + c[z - 5][1] + c[z - 6][1] + c[z - 7][1] + c[z - 8][1]) / 9;//足前基准值
+								A31 = (c[z][2] + c[z - 1][2] + c[z - 2][2] + c[z - 3][2] + c[z - 4][2] + c[z - 5][2] + c[z - 6][2] + c[z - 7][2] + c[z - 8][2]) / 9;//足后基准值
+								A12 = (c[z][0] + c[z - 2][0] + c[z - 4][0] + c[z - 6][0] + c[z - 8][0]) / 5;//足中基准值
+								A22 = (c[z][1] + c[z - 2][1] + c[z - 4][1] + c[z - 6][1] + c[z - 8][1]) / 5;//足前基准值
+								A32 = (c[z][2] + c[z - 2][2] + c[z - 4][2] + c[z - 6][2] + c[z - 8][2]) / 5;//足后基准值
+								//printf("%f   %f   %f    ", A1,A2,A3);
+							}
+
+							if (z >= 10)
+							{
+								if ((yali1[9] > A1 + 0.03) || (yali2[9] > A2 + 0.03) || (yali3[9] > A3 + 0.03))//检测足前足中足后转为支撑相
+								{
+									state = 1;//支撑相
+									z = 0;
+								}
+							}
+
+							if (z < 12)
+							{
+								z++;
+							}
+						}
+
+						else if (state == 1)//此时为支撑相
+						{
+							if ((yali1[9] < A1 + 0.02) && (yali2[9] < A2 + 0.02) && ( yali3[9] < A3 + 0.02))//检测足前足中足后转为摆动相
+							{
+								state = 0; //摆动相
+							}
+						}
+					}
+
+					for (i = 0; i < 9; i++)
+					{
+						yali1[i] = yali1[i + 1];
+						yali2[i] = yali2[i + 1];
+						yali3[i] = yali3[i + 1];
+					}
+
+/*					if (state == 1)
+					{
+						m1++;
+						if (m1 == 1000)
+						{
+							flag1 = 0;//状态10秒未改变，转为用斜率判断
+							m1 = 0;
+						}
+					}
+
+					if (state == 0)
+					{
+						m2++;
+						if (m2 == 1000)
+						{
+							flag1 = 0;//状态10秒未改变，转为用斜率判断
+							m2 = 0;
+						}
+					}
+*/
+					
+					printf("%f     %f     %f     %d\n", b[9][0], b[9][1], b[9][2],state); 
+
+					ofstream outFile;
+					outFile.open("down.csv", ios::app);	// 打开模式可省略
+					outFile << b[9][0] << "," << b[9][1] << "," << b[9][2] << "," << state + 2 << endl;	//导入表格
+					outFile.close();
+				}
+			}
+		}
+
+		else
+		{
+			flag0 = 0;
+		}
+	}
+}
