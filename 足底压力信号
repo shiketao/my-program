@@ -56,6 +56,44 @@ HANDLE 初始化串口(char *szStr)
 	SetCommState(hCom1, &dcb);
 	return hCom1;
 }
+ 
+float GetMedianNum(float * bArray, int iFilterLen)
+{
+	int i, j;// 循环变量
+	float bTemp;
+	// 用冒泡法对数组进行排序
+	for (j = 9; j > (10 - iFilterLen); j--)
+	{
+		for (i = j; i > (10 - iFilterLen); i--)
+		{
+			if (bArray[i] < bArray[i - 1])
+			{
+				// 互换
+				bTemp = bArray[i];
+				bArray[i] = bArray[i - 1];
+				bArray[i - 1] = bTemp;
+				//printf("%f ,\n", bTemp);
+			}
+		}
+	}
+	//printf("%f , %f \n", bArray[9] , bArray[5]);
+
+	// 计算中值
+	if ((iFilterLen % 2) == 1)
+	{
+		// 数组有奇数个元素，返回中间一个元素
+		bTemp = bArray[10 - (iFilterLen + 1) / 2];
+	}
+	else
+	{
+		// 数组有偶数个元素，返回中间两个元素平均值
+		bTemp = (bArray[10 - iFilterLen / 2] + bArray[10 - iFilterLen / 2 - 1]) / 2;
+	}
+
+	return bTemp;
+}
+
+
 
 int main()
 {
@@ -68,29 +106,16 @@ int main()
 	int flag2 = 0;	//在第一次判断中，判断是否转为摆动
 	int state = 1;	//支撑相
 	int i = 0;		//计数
-	int j = 0;		//计数
 	int k = 0;		//判断斜率时，数据个数是否满足
 	int z = 0;		//计数
-	int m1 = 0;
-	int m2 = 0;
-	int n = 0;
 	float rec[9] = { 0 };
 	float yali1[10] = { 0 };
 	float yali2[10] = { 0 };
 	float yali3[10] = { 0 };
-	float a[10] = { 0 };
-	float b[10][3] = { 0 };	//储存判断第一次支撑转摆动时之前的10组数据
-	float c[10][3] = { 0 };	//计算基准值的点
-	float d[4][3] = { 0 };	//计算4个点均值的数组
 	float A1 = 0;			//三个基准值
 	float A2 = 0;
 	float A3 = 0;
-	float A11 = 0;			//三个基准值
-	float A21 = 0;
-	float A31 = 0;
-	float A12 = 0;			//三个基准值
-	float A22 = 0;
-	float A32 = 0;
+	
 
 	while (1)
 	{
@@ -123,115 +148,80 @@ int main()
 					yali2[9] = ((long)(rec[5] + rec[4] * 256 + rec[3] * 256 * 256))*(1.7881E-07);//右足前
 					yali3[9] = ((long)(rec[2] + rec[1] * 256 + rec[0] * 256 * 256))*(1.7881E-07);//右足后
 					count = 0;
-					flag0 = 0;
+					flag0 = 0;		
 
-					if (flag1 == 0 && state == 1)
+					if (k >= 11)
 					{
-						d[3][0] = yali1[9];
-						d[3][1] = yali2[9];
-						d[3][2] = yali3[9];
+						yali1[9] = (yali1[9] + yali1[8] + yali1[7]) / 3;
+						yali2[9] = (yali2[9] + yali2[8] + yali2[7]) / 3;
+						yali3[9] = (yali3[9] + yali3[8] + yali3[7]) / 3;
 
-						if (n >= 4)
+						if (flag1 == 0 && state == 1)
 						{
-							b[9][0] = (d[3][0] + d[2][0] + d[1][0] + d[0][0]) / 4;
-							b[9][1] = (d[3][1] + d[2][1] + d[1][1] + d[0][1]) / 4;
-							b[9][2] = (d[3][2] + d[2][2] + d[1][2] + d[0][2]) / 4;
-						}
-
-						else 
-						{
-							n++;
-						}
-
-						for (i = 0; i < 4; i++)
-						{
-							d[0][i] = d[0][i + 1];
-							d[1][i] = d[1][i + 1];
-							d[2][i] = d[2][i + 1];
-						}
-
-						if (k >= 11)	//只有3处压力减小，才转为摆动
-						{
-							if (flag2 == 0)
-							{
-								if (((b[9][0] - b[0][0]) < -0.02) && ((b[9][1] - b[0][1]) < -0.03) && ((b[9][2] - b[0][2]) < -0.03))
+						
+								if (flag2 == 0)//只有3处压力减小，才转为摆动
 								{
-									flag2 = 1;
+									if (((yali1[9] - yali1[0]) < -0.02) && ((yali2[9] - yali2[0]) < -0.01) && ((yali3[9] - yali3[0]) < -0.02))
+									{
+										flag2 = 1;
+									}
+								}
+
+								if (flag2 == 1)
+								{
+									if (((yali1[9] - yali1[6]) < -0.02) && ((yali2[9] - yali2[6]) < -0.01) || ((yali3[9] - yali3[6]) < -0.02))
+									{
+										state = 0;//进入摆动项
+										flag1 = 1;
+									}
+
+									else
+									{
+										flag2 = 0;
+									}
+								}
+						
+						}
+
+						if (flag1 == 1)//已经有基准值
+						{
+							if (state == 0)//此时为摆动相
+							{
+								if (z == 10)
+								{
+									A1 = (yali1[9] + yali1[8] + yali1[7] + yali1[6] + yali1[5]) / 5;//足中基准值
+									A2 = (yali2[9] + yali2[8] + yali2[7] + yali2[6] + yali2[5]) / 5;//足前基准值
+									A3 = (yali3[9] + yali3[8] + yali3[7] + yali3[6] + yali3[5]) / 5;//足后基准值
+								}
+
+								if (z >= 10)
+								{
+									if ((yali1[9] > A1 + 0.03) || (yali2[9] > A2 + 0.03) || (yali3[9] > A3 + 0.03))//检测足前足中足后转为支撑相
+									{
+										state = 1;//支撑相
+										z = 0;
+									}
+								}
+
+								if (z < 12)
+								{
+									z++;
 								}
 							}
 
-							if (flag2 == 1)
+							else if (state == 1)//此时为支撑相
 							{
-								if (((b[9][0] - b[6][0]) < -0.02) && ((b[9][1] - b[6][1]) < -0.03) && ((b[9][2] - b[6][2]) < -0.03))
+								if ((yali1[9] < A1 + 0.02) && (yali2[9] < A2 + 0.02) && ( yali3[9] < A3 + 0.02))//检测足前足中足后转为摆动相
 								{
-									state = 0;//进入摆动项
-									flag1 = 1;
-								}
-
-								else
-								{
-									flag2 = 0;
+									state = 0; //摆动相
 								}
 							}
-						}
-
-						else
-						{
-							k++;
-						}
-
-						for (j = 0; j < 9; j++)
-						{
-							b[j][0] = b[j + 1][0];
-							b[j][1] = b[j + 1][1];
-							b[j][2] = b[j + 1][2];
 						}
 					}
 
-					if (flag1 == 1)//已经有基准值
+					else
 					{
-						if (state == 0)//此时为摆动相
-						{
-							c[z][0] = yali1[9];
-							c[z][1] = yali2[9];
-							c[z][2] = yali3[9];
-
-							if (z == 10)
-							{
-								A1 = (c[z][0] + c[z - 1][0] + c[z - 2][0]) / 3;//足中基准值
-								A2 = (c[z][1] + c[z - 1][1] + c[z - 2][1]) / 3;//足前基准值
-								A3 = (c[z][2] + c[z - 1][2] + c[z - 2][2]) / 3;//足后基准值
-								A11 = (c[z][0] + c[z - 1][0] + c[z - 2][0] + c[z - 3][0] + c[z - 4][0] + c[z - 5][0] + c[z - 6][0] + c[z - 7][0] + c[z - 8][0]) / 9;//足中基准值
-								A21 = (c[z][1] + c[z - 1][1] + c[z - 2][1] + c[z - 3][1] + c[z - 4][1] + c[z - 5][1] + c[z - 6][1] + c[z - 7][1] + c[z - 8][1]) / 9;//足前基准值
-								A31 = (c[z][2] + c[z - 1][2] + c[z - 2][2] + c[z - 3][2] + c[z - 4][2] + c[z - 5][2] + c[z - 6][2] + c[z - 7][2] + c[z - 8][2]) / 9;//足后基准值
-								A12 = (c[z][0] + c[z - 2][0] + c[z - 4][0] + c[z - 6][0] + c[z - 8][0]) / 5;//足中基准值
-								A22 = (c[z][1] + c[z - 2][1] + c[z - 4][1] + c[z - 6][1] + c[z - 8][1]) / 5;//足前基准值
-								A32 = (c[z][2] + c[z - 2][2] + c[z - 4][2] + c[z - 6][2] + c[z - 8][2]) / 5;//足后基准值
-								//printf("%f   %f   %f    ", A1,A2,A3);
-							}
-
-							if (z >= 10)
-							{
-								if ((yali1[9] > A1 + 0.03) || (yali2[9] > A2 + 0.03) || (yali3[9] > A3 + 0.03))//检测足前足中足后转为支撑相
-								{
-									state = 1;//支撑相
-									z = 0;
-								}
-							}
-
-							if (z < 12)
-							{
-								z++;
-							}
-						}
-
-						else if (state == 1)//此时为支撑相
-						{
-							if ((yali1[9] < A1 + 0.02) && (yali2[9] < A2 + 0.02) && ( yali3[9] < A3 + 0.02))//检测足前足中足后转为摆动相
-							{
-								state = 0; //摆动相
-							}
-						}
+						k++;
 					}
 
 					for (i = 0; i < 9; i++)
@@ -241,32 +231,11 @@ int main()
 						yali3[i] = yali3[i + 1];
 					}
 
-/*					if (state == 1)
-					{
-						m1++;
-						if (m1 == 1000)
-						{
-							flag1 = 0;//状态10秒未改变，转为用斜率判断
-							m1 = 0;
-						}
-					}
-
-					if (state == 0)
-					{
-						m2++;
-						if (m2 == 1000)
-						{
-							flag1 = 0;//状态10秒未改变，转为用斜率判断
-							m2 = 0;
-						}
-					}
-*/
-					
-					printf("%f     %f     %f     %d\n", b[9][0], b[9][1], b[9][2],state); 
+					printf("%f     %f     %f     %d\n", yali1[9], yali2[9], yali3[9], state);
 
 					ofstream outFile;
-					outFile.open("down.csv", ios::app);	// 打开模式可省略
-					outFile << b[9][0] << "," << b[9][1] << "," << b[9][2] << "," << state + 2 << endl;	//导入表格
+					outFile.open("tabu123.csv", ios::app);	// 打开模式可省略
+					outFile << yali1[9] << "," << yali2[9] << "," << yali3[9] << "," << state + 2 << endl;	//导入表格
 					outFile.close();
 				}
 			}
