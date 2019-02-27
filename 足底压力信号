@@ -109,10 +109,10 @@ int main()
 	int k = 0;		//判断斜率时，数据个数是否满足
 	int z = 0;		//计数
 	float rec[9] = { 0 };
-	float yali1[10] = { 0 };
+	float yali1[10] = { 0 };//存储三组10个点的数组
 	float yali2[10] = { 0 };
 	float yali3[10] = { 0 };
-	float A1 = 0;			//三个基准值
+	float A1 = 0;		//三个基准值
 	float A2 = 0;
 	float A3 = 0;
 	
@@ -152,7 +152,7 @@ int main()
 
 					if (k >= 11)
 					{
-						yali1[9] = (yali1[9] + yali1[8] + yali1[7]) / 3;
+						yali1[9] = (yali1[9] + yali1[8] + yali1[7]) / 3;//均值滤波
 						yali2[9] = (yali2[9] + yali2[8] + yali2[7]) / 3;
 						yali3[9] = (yali3[9] + yali3[8] + yali3[7]) / 3;
 
