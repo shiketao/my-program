@@ -56,66 +56,27 @@ HANDLE 初始化串口(char *szStr)
 	SetCommState(hCom1, &dcb);
 	return hCom1;
 }
- 
-float GetMedianNum(float * bArray, int iFilterLen)
-{
-	int i, j;// 循环变量
-	float bTemp;
-	// 用冒泡法对数组进行排序
-	for (j = 9; j > (10 - iFilterLen); j--)
-	{
-		for (i = j; i > (10 - iFilterLen); i--)
-		{
-			if (bArray[i] < bArray[i - 1])
-			{
-				// 互换
-				bTemp = bArray[i];
-				bArray[i] = bArray[i - 1];
-				bArray[i - 1] = bTemp;
-				//printf("%f ,\n", bTemp);
-			}
-		}
-	}
-	//printf("%f , %f \n", bArray[9] , bArray[5]);
-
-	// 计算中值
-	if ((iFilterLen % 2) == 1)
-	{
-		// 数组有奇数个元素，返回中间一个元素
-		bTemp = bArray[10 - (iFilterLen + 1) / 2];
-	}
-	else
-	{
-		// 数组有偶数个元素，返回中间两个元素平均值
-		bTemp = (bArray[10 - iFilterLen / 2] + bArray[10 - iFilterLen / 2 - 1]) / 2;
-	}
-
-	return bTemp;
-}
-
 
 
 int main()
 {
-	HANDLE hCom1 = 初始化串口("COM1");
+	HANDLE hCom1 = 初始化串口("COM3");
 	DWORD readsize;
 	int shuju[1] = { 0 };//每次接收一个字节
 	int count = 0;	//数据包字节个数
 	int flag0 = 0;	//接收每个字节的标志位
 	int flag1 = 0;	//0为第一次判断支撑转摆动、1为否
-	int flag2 = 0;	//在第一次判断中，判断是否转为摆动
 	int state = 1;	//支撑相
-	int i = 0;		//计数
+	int y = 0;		//计数
 	int k = 0;		//判断斜率时，数据个数是否满足
 	int z = 0;		//计数
 	float rec[9] = { 0 };
-	float yali1[10] = { 0 };//存储三组10个点的数组
+	float yali1[10] = { 0 };
 	float yali2[10] = { 0 };
 	float yali3[10] = { 0 };
-	float A1 = 0;		//三个基准值
+	float A1 = 0;			//三个基准值
 	float A2 = 0;
 	float A3 = 0;
-	
 
 	while (1)
 	{
@@ -144,43 +105,30 @@ int main()
 
 				if (count == 9)
 				{
-					yali1[9] = ((long)(rec[8] + rec[7] * 256 + rec[6] * 256 * 256))*(1.7881E-07);//右足中
-					yali2[9] = ((long)(rec[5] + rec[4] * 256 + rec[3] * 256 * 256))*(1.7881E-07);//右足前
-					yali3[9] = ((long)(rec[2] + rec[1] * 256 + rec[0] * 256 * 256))*(1.7881E-07);//右足后
+					yali1[9] = ((long)(rec[8] + rec[7] * 256 + rec[6] * 256 * 256)) * (1.7881E-07);//右足中
+					yali2[9] = ((long)(rec[5] + rec[4] * 256 + rec[3] * 256 * 256)) * (1.7881E-07);//右足前
+					yali3[9] = ((long)(rec[2] + rec[1] * 256 + rec[0] * 256 * 256)) * (1.7881E-07);//右足后
 					count = 0;
-					flag0 = 0;		
+					flag0 = 0;
 
 					if (k >= 11)
 					{
-						yali1[9] = (yali1[9] + yali1[8] + yali1[7]) / 3;//均值滤波
+						yali1[9] = (yali1[9] + yali1[8] + yali1[7]) / 3;
 						yali2[9] = (yali2[9] + yali2[8] + yali2[7]) / 3;
 						yali3[9] = (yali3[9] + yali3[8] + yali3[7]) / 3;
 
-						if (flag1 == 0 && state == 1)
+						if (flag1 == 0)
 						{
-						
-								if (flag2 == 0)//只有3处压力减小，才转为摆动
-								{
-									if (((yali1[9] - yali1[0]) < -0.02) && ((yali2[9] - yali2[0]) < -0.01) && ((yali3[9] - yali3[0]) < -0.02))
-									{
-										flag2 = 1;
-									}
-								}
-
-								if (flag2 == 1)
-								{
-									if (((yali1[9] - yali1[6]) < -0.02) && ((yali2[9] - yali2[6]) < -0.01) || ((yali3[9] - yali3[6]) < -0.02))
-									{
-										state = 0;//进入摆动项
-										flag1 = 1;
-									}
-
-									else
-									{
-										flag2 = 0;
-									}
-								}
-						
+							if (((yali1[9] - yali1[0]) < -0.02) && 
+								((yali2[9] - yali2[0]) < -0.01) || 
+								((yali3[9] - yali3[0]) < -0.02) && 
+								((yali1[9] - yali1[6]) < -0.02) && 
+								((yali2[9] - yali2[6]) < -0.01) || 
+								((yali3[9] - yali3[6]) < -0.02))
+							{
+								state = 0;//进入摆动项
+								flag1 = 1;
+							}
 						}
 
 						if (flag1 == 1)//已经有基准值
@@ -211,7 +159,7 @@ int main()
 
 							else if (state == 1)//此时为支撑相
 							{
-								if ((yali1[9] < A1 + 0.02) && (yali2[9] < A2 + 0.02) && ( yali3[9] < A3 + 0.02))//检测足前足中足后转为摆动相
+								if ((yali1[9] < A1 + 0.02) && (yali2[9] < A2 + 0.02) && (yali3[9] < A3 + 0.02))//检测足前足中足后转为摆动相
 								{
 									state = 0; //摆动相
 								}
@@ -224,26 +172,21 @@ int main()
 						k++;
 					}
 
-					for (i = 0; i < 9; i++)
+					for (y = 0; y < 9; y++)
 					{
-						yali1[i] = yali1[i + 1];
-						yali2[i] = yali2[i + 1];
-						yali3[i] = yali3[i + 1];
+						yali1[y] = yali1[y + 1];
+						yali2[y] = yali2[y + 1];
+						yali3[y] = yali3[y + 1];
 					}
 
-					printf("%f     %f     %f     %d\n", yali1[9], yali2[9], yali3[9], state);
+					printf("%f     %f     %f     %f     %f     %f     %d\n", yali1[9], yali2[9], yali3[9], A1, A2, A3, state);
 
 					ofstream outFile;
-					outFile.open("tabu123.csv", ios::app);	// 打开模式可省略
-					outFile << yali1[9] << "," << yali2[9] << "," << yali3[9] << "," << state + 2 << endl;	//导入表格
+					outFile.open("444444444444.csv", ios::app);	// 打开模式可省略
+					outFile << yali1[9] << "," << yali2[9] << "," << yali3[9] << "," << A1 << "," << A2 << "," << A3 << "," << state + 2 << endl;//导入表格
 					outFile.close();
 				}
 			}
-		}
-
-		else
-		{
-			flag0 = 0;
 		}
 	}
 }
