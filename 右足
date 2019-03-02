@@ -1,0 +1,214 @@
+#include <iostream>
+#include <Windows.h>
+#include <string>
+#include <thread>
+#include <iomanip>
+#include <vector>
+#include <fstream>
+#include <sstream>
+#include <time.h>
+#include <stdlib.h>
+#include <math.h>
+
+using namespace std;
+
+HANDLE 初始化串口(char *szStr)
+{
+
+	WCHAR wszClassName[5];
+	memset(wszClassName, 0, sizeof(wszClassName));
+	MultiByteToWideChar(CP_ACP, 0, szStr, strlen(szStr) + 1, wszClassName,
+		sizeof(wszClassName) / sizeof(wszClassName[0]));
+	HANDLE hCom1 = CreateFile(wszClassName,//COM口
+		GENERIC_READ | GENERIC_WRITE,	//允许读和写
+		0, //独占方式
+		NULL,
+		OPEN_EXISTING, //打开而不是创建
+		0, //同步方式
+		NULL);
+
+	if (hCom1 == INVALID_HANDLE_VALUE)
+	{
+		printf("打开COM失败!\n");
+	}
+	else
+	{
+		printf("COM打开成功！\n");
+	}
+
+	SetupComm(hCom1, 16, 16); //输入缓冲区和输出缓冲区的大小都是1024
+	COMMTIMEOUTS TimeOuts;
+
+	//设定读超时
+	TimeOuts.ReadIntervalTimeout = 100;
+	TimeOuts.ReadTotalTimeoutMultiplier = 5000;
+	TimeOuts.ReadTotalTimeoutConstant = 5000;
+	//设定写超时
+	TimeOuts.WriteTotalTimeoutMultiplier = 500;
+	TimeOuts.WriteTotalTimeoutConstant = 2000;
+	SetCommTimeouts(hCom1, &TimeOuts); //设置超时
+	DCB dcb;
+	GetCommState(hCom1, &dcb);
+	dcb.BaudRate = 115200; //波特率为9600
+	dcb.ByteSize = 8; //每个字节有8位
+	dcb.Parity = NOPARITY; //无奇偶校验位
+	dcb.StopBits = ONESTOPBIT; //1个停止位
+	SetCommState(hCom1, &dcb);
+	return hCom1;
+}
+
+int main()
+{
+	HANDLE hCom1 = 初始化串口("COM2");
+	DWORD readsize;
+	int shuju[1] = { 0 };//每次接收一个字节
+	int count = 0;	//数据包字节个数
+	int flag0 = 0;	//接收每个字节的标志位
+	int flag1 = 0;	//0为第一次判断支撑转摆动、1为否
+	int flag2 = 0;
+	int state = 1;	//支撑相
+	int y = 0;		//计数
+	int k = 0;		//判断斜率时，数据个数是否满足
+	int z = 0;		//计数
+	float rec[9] = { 0 };
+	float yali1[15] = { 0 };
+	float yali2[15] = { 0 };
+	float yali3[15] = { 0 };
+	float A1 = 0;	//三个基准值
+	float A2 = 0;
+	float A3 = 0;
+	float A4 = 0;	//三个最大基准值
+	float A5 = 0;
+	float A6 = 0;
+
+	while (1)
+	{
+		ReadFile(hCom1,	//读入shuju的文件指针,这个指针指向的文件必须是GENERIC_READ 访问属性的文件
+			shuju,		//接收shuju的缓冲区
+			1,			//指定要读取的字节数
+			&readsize,	//指向一个DWORD类型变量的指针，用来接收读取的字节数
+			NULL);
+
+		if (readsize > 0)
+		{
+			if (flag0 == 0 && shuju[0] == 0xAA)
+			{
+				flag0 = 1;
+			}
+
+			else if (flag0 == 1 && shuju[0] == 0x55)
+			{
+				flag0 = 2;
+			}
+
+			else if (flag0 == 2)
+			{
+				rec[count] = shuju[0];
+				count++;
+
+				if (count == 9)
+				{
+					yali1[14] = ((long)(rec[8] + rec[7] * 256 + rec[6] * 256 * 256)) * (1.7881E-07);//中
+					yali2[14] = ((long)(rec[5] + rec[4] * 256 + rec[3] * 256 * 256)) * (1.7881E-07);//前
+					yali3[14] = ((long)(rec[2] + rec[1] * 256 + rec[0] * 256 * 256)) * (1.7881E-07);//后
+
+					count = 0;
+					flag0 = 0;
+
+					yali1[14] = (yali1[14] + yali1[13] + yali1[12]) / 3;
+					yali2[14] = (yali2[14] + yali2[13] + yali2[12]) / 3;
+					yali3[14] = (yali3[14] + yali3[13] + yali3[12]) / 3;
+
+					if (flag1 == 0)
+					{
+						if ((((yali1[14] - yali1[0]) < -0.02) || ((yali2[14] - yali2[0]) < -0.01))  && ((yali3[14] - yali3[0]) < -0.02) &&
+							(((yali1[14] - yali1[7]) < -0.01) || (((yali2[14] - yali2[7]) < -0.01)) && ((yali3[14] - yali3[7]) < -0.01)))
+						{
+							state = 0;//进入摆动项
+							flag1 = 1;
+						}
+					}
+
+					if (flag1 == 1)//已经有基准值
+					{
+						if (state == 0)//此时为摆动相
+						{
+							if (z == 15)
+							{
+								A1 = (yali1[14] + yali1[13] + yali1[12] + yali1[11] + yali1[10]) / 5;//基准值
+								A2 = (yali2[14] + yali2[13] + yali2[12] + yali2[11] + yali2[10]) / 5;
+								A3 = (yali3[14] + yali3[13] + yali3[12] + yali3[11] + yali3[10]) / 5;
+
+								if (flag2 == 0)
+								{
+									A4 = (yali1[14] + yali1[13] + yali1[12] + yali1[11] + yali1[10] + yali1[9] + yali1[8] + yali1[7] + yali1[6] + yali1[5]) / 10 + 0.08;//最大基准值
+									A5 = (yali2[14] + yali2[13] + yali2[12] + yali2[11] + yali2[10] + yali2[9] + yali2[8] + yali2[7] + yali2[6] + yali2[5]) / 10 + 0.08;
+									A6 = (yali3[14] + yali3[13] + yali3[12] + yali3[11] + yali3[10] + yali3[9] + yali3[8] + yali3[7] + yali3[6] + yali3[5]) / 10 + 0.08;
+
+									flag2 = 1;
+								}
+
+								if (flag2 == 1)
+								{
+									if (A1 > A4)
+									{
+										A1 = A4;
+									}
+									if (A2 > A5)
+									{
+										A2 = A5;
+									}
+									if (A3 > A6)
+									{
+										A3 = A6;
+									}
+								}
+							}
+
+							if (z >= 15)
+							{
+								if ((yali1[14] > A1 + 0.03) || (yali2[14] > A2 + 0.03) || (yali3[14] > A3 + 0.03))//检测足前足中足后转为支撑相
+								{
+									state = 1;//支撑相
+									z = 0;
+								}
+							}
+
+							if (z < 16)
+							{
+								z++;
+							}
+						}
+
+						else if (state == 1)//此时为支撑相
+						{
+							if ((yali1[14] < A1 + 0.02) && (yali2[14] < A2 + 0.02) && (yali3[14] < A3 + 0.02))//检测足前足中足后转为摆动相
+							{
+								state = 0; //摆动相
+							}
+						}
+					}
+
+					for (y = 0; y < 14; y++)
+					{
+						yali1[y] = yali1[y + 1];
+						yali2[y] = yali2[y + 1];
+						yali3[y] = yali3[y + 1];
+					}
+
+					printf("%f     %f     %f     %f     %f     %f     %d\n", yali1[14], yali2[14], yali3[14], A1, A2, A3, state);
+
+					//ofstream outFile;
+					//outFile.open("333.csv", ios::app);	// 打开模式可省略
+					//outFile << yali1[14] << "," << yali2[14] << "," << yali3[14] << "," << A1 << "," << A2 << "," << A3  << "," << state + 2 << endl;	//导入表格
+					//outFile.close();
+				}
+			}
+		}
+
+		else
+		{
+			flag0 = 0;
+		}
+	}
+}
