@@ -182,7 +182,7 @@ int main()
 					printf("%f     %f     %f     %f     %f     %f     %d\n", yali1[9], yali2[9], yali3[9], A1, A2, A3, state);
 
 					ofstream outFile;
-					outFile.open("444444444444.csv", ios::app);	// 打开模式可省略
+					outFile.open("data.csv", ios::app);	// 打开模式可省略
 					outFile << yali1[9] << "," << yali2[9] << "," << yali3[9] << "," << A1 << "," << A2 << "," << A3 << "," << state + 2 << endl;//导入表格
 					outFile.close();
 				}
