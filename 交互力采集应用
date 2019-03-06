@@ -65,10 +65,15 @@ int main()
 	int count = 0;	//数据包字节个数
 	int flag0 = 0;	//接收每个字节的标志位
 	int y = 0;		//计数
+	int k = 100;
 	float rec[9] = { 0 };
-	float yali1[15] = { 0 };
-	float yali2[15] = { 0 };
-	
+	float yali1[3] = { 0 };
+	float yali2[3] = { 0 };
+	float A1 = 2.2;
+	float A2 = 1.7;
+	float angle = 0;
+	float a = 5;
+
 
 	while (1)
 	{
@@ -97,32 +102,42 @@ int main()
 
 				if (count == 6)
 				{
-					yali1[14] = ((long)(rec[5] + rec[4] * 256 + rec[3] * 256 * 256)) * (1.7881E-07);//后
-					yali2[14] = ((long)(rec[2] + rec[1] * 256 + rec[0] * 256 * 256)) * (1.7881E-07);//前
+					yali1[3] = ((long)(rec[5] + rec[4] * 256 + rec[3] * 256 * 256)) * (1.7881E-07);//后
+					yali2[3] = ((long)(rec[2] + rec[1] * 256 + rec[0] * 256 * 256)) * (1.7881E-07);//前
 
 					count = 0;
 					flag0 = 0;
 
-					//yali1[14] = (yali1[14] + yali1[13] + yali1[12]) / 3;
-					//yali2[14] = (yali2[14] + yali2[13] + yali2[12]) / 3;
+					yali1[2] = (yali1[2] + yali1[1] + yali1[0]) / 3;//均值滤波
+					yali2[2] = (yali2[2] + yali2[1] + yali2[0]) / 3;
 
+					if (yali1[2] > A1 && yali2[2] < A2)//后有压力
+					{
+						angle = a * (yali1[2] - A1) + k * (yali1[2] - yali1[0]);
+					}
 
+					if (yali1[2] < A1 && yali2[2] > A2)//前有压力
+					{
+						angle = -(a * (yali2[2] - A2) + k * (yali2[2] - yali2[0]));
+					}
+					
+					if (yali1[2] > A1 && yali2[2] > A2)//前后都有压力
+					{
+						angle = k * ((yali1[2] - A1) - (yali2[2] - A2));
+					}
 
+					for (y = 0; y < 3; y++)
+					{
+						yali1[y] = yali1[y + 1];
+						yali2[y] = yali2[y + 1];
+					}
 
+					printf("%f     %f    %f\n", yali1[2], yali2[2], angle);
 
-
-					//for (y = 0; y < 14; y++)
-					//{
-					//	yali1[y] = yali1[y + 1];
-					//	yali2[y] = yali2[y + 1];
-					//}
-
-					printf("%f     %f    \n", yali1[14], yali2[14]);
-
-
+					angle = 0;
 					//ofstream outFile;
-					//outFile.open("333.csv", ios::app);	// 打开模式可省略
-					//outFile << yali1[14] << "," << yali2[14] << "," << yali3[14] << "," << A1 << "," << A2 << "," << A3  << "," << state + 2 << endl;	//导入表格
+					//outFile.open("444.csv", ios::app);	// 打开模式可省略
+					//outFile << yali1[14] << "," << yali2[14] <<  endl;	//导入表格
 					//outFile.close();
 				}
 			}
